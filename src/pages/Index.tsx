@@ -3,6 +3,7 @@ import { IdeaForm } from '@/components/IdeaForm';
 import { ScoreResults } from '@/components/ScoreResults';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Target, TrendingUp, Zap } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Score {
   profitability: number;
@@ -23,23 +24,47 @@ const Index = () => {
   const handleIdeaSubmit = async (idea: string) => {
     setIsLoading(true);
     
-    // TODO: Implement OpenAI API call through Supabase Edge Function
-    // For now, simulate with mock data
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const mockScore: Score = {
-      profitability: Math.floor(Math.random() * 40) + 60,
-      demand: Math.floor(Math.random() * 40) + 60,
-      execution: Math.floor(Math.random() * 40) + 60,
-      reasoning: {
-        profitability: "The business model shows strong potential for profitability with multiple revenue streams including subscription fees, transaction commissions, and premium features. Market size and pricing flexibility support sustainable growth.",
-        demand: "There's significant market demand for this solution, evidenced by existing competitors and growing market trends. Target audience pain points are well-defined and the solution addresses a real need.",
-        execution: "Execution complexity is moderate. While technical requirements are manageable, regulatory considerations and user acquisition may present challenges. Strong team and adequate funding would be beneficial.",
-        overall: "This idea demonstrates solid potential across all key metrics. The combination of clear market demand, viable business model, and manageable execution complexity makes it a promising opportunity worth pursuing with proper planning and resources."
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-idea', {
+        body: { idea }
+      });
+
+      if (error) {
+        console.error('Error calling validate-idea function:', error);
+        throw new Error(error.message || 'Failed to validate idea');
       }
-    };
+
+      // Transform the response to match our Score interface
+      const scoreData: Score = {
+        profitability: data.profitability,
+        demand: data.demand,
+        execution: data.execution,
+        reasoning: {
+          profitability: data.profitabilityReasoning,
+          demand: data.demandReasoning,
+          execution: data.executionReasoning,
+          overall: `Based on the analysis, this idea scores ${Math.round((data.profitability + data.demand + data.execution) / 3)}% overall. The combination of profitability potential, market demand, and execution feasibility provides a comprehensive view of the opportunity.`
+        }
+      };
+      
+      setCurrentScore(scoreData);
+    } catch (error) {
+      console.error('Failed to validate idea:', error);
+      // Fall back to mock data if API fails
+      const mockScore: Score = {
+        profitability: Math.floor(Math.random() * 40) + 60,
+        demand: Math.floor(Math.random() * 40) + 60,
+        execution: Math.floor(Math.random() * 40) + 60,
+        reasoning: {
+          profitability: "Unable to connect to validation service. This is a placeholder score.",
+          demand: "Unable to connect to validation service. This is a placeholder score.",
+          execution: "Unable to connect to validation service. This is a placeholder score.",
+          overall: "Service temporarily unavailable. Please try again later."
+        }
+      };
+      setCurrentScore(mockScore);
+    }
     
-    setCurrentScore(mockScore);
     setIsLoading(false);
   };
 
